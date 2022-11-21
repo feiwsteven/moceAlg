@@ -6,6 +6,7 @@ from scipy.linalg import svd
 from scipy.stats import norm
 from sklearn.linear_model import LassoLarsCV
 from sklearn.model_selection import train_test_split
+from loguru import logger
 
 from lib.utility import SimulateData
 
@@ -101,6 +102,7 @@ class MoceAlg:
 
     def inference(self, x, y, tau_a, tau_c, print_progress=False, delta=1e-0):
         """MOCE de-biased estimator and its inference"""
+        logger.info(f"inside inference tau_c = {tau_c}")
         self.beta_moce = np.zeros(self.p)
         self.beta_moce_astd = np.zeros(self.p)
 
@@ -233,6 +235,8 @@ class MoceAlg:
                     self.x, self.y, test_size=1 / k_fold, random_state=0 + k
                 )
                 try:
+
+                    logger.info(f"outside inference tau_c ={tau_c}")
                     self.inference(x_train, y_train, tau_a_k[i], tau_c, False)
                     score[i] += (
                         y_test

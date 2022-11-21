@@ -85,34 +85,37 @@ class TestMoce(unittest.TestCase):
         dat_obj = SimulateData(n, p, beta_0, std_0, cov)
 
         dat_obj.simulate_linear(True)
+        moce_obj = MoceAlg(dat_obj.x, dat_obj.y, beta_0)
+        moce_obj.contraction()
 
-        opt_tau_a = np.zeros(n_iter)
-        opt_tau_c = np.zeros(n_iter)
+        moce_obj.expansion(a_max_size, a_offset)
+        tau_a_k = 10 ** np.linspace(-12, 2, 20)
+        tau_c_k = 10 ** np.linspace(-12, 4, 20)
+
+        opt_tau_a = moce_obj.select_tau_a_cv(tau_a_k, 1e-1, 10, delta_tau_a)
+        opt_tau_c = moce_obj.select_tau_c_cv(
+            opt_tau_a, tau_c_k, 10, delta_tau_c
+        )
 
         beta_moce = np.zeros((p, n_iter))
         beta_moce_low = np.zeros((p, n_iter))
         beta_moce_up = np.zeros((p, n_iter))
+        beta_hat = np.zeros((p, n_iter))
         for i in range(n_iter):
             logger.info(f"i = {i}")
-            tau_a_k = 10 ** np.linspace(-12, 2, 20)
-            tau_c_k = 10 ** np.linspace(-12, 4, 20)
 
             dat_obj.simulate_linear(True)
             moce_obj = MoceAlg(dat_obj.x, dat_obj.y, beta_0)
             moce_obj.contraction()
 
             moce_obj.expansion(a_max_size, a_offset)
-            opt_tau_a[i] = moce_obj.select_tau_a_cv(tau_a_k, 1e-1, 10, delta_tau_a)
 
-            opt_tau_c[i] = moce_obj.select_tau_c_cv(
-                opt_tau_a[i], tau_c_k, 10, delta_tau_c
-            )
-
-            moce_obj.inference(dat_obj.x, dat_obj.y, opt_tau_a[i], opt_tau_c[i])
+            moce_obj.inference(dat_obj.x, dat_obj.y, opt_tau_a, opt_tau_c)
             moce_obj.get_confidence(0.05)
             beta_moce[:, i] = moce_obj.beta_moce
             beta_moce_low[:, i] = moce_obj.beta_moce_ci[:, 0]
             beta_moce_up[:, i] = moce_obj.beta_moce_ci[:, 1]
+            beta_hat[:, i] = moce_obj.beta_hat
 
         print(beta_moce)
 

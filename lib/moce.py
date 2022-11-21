@@ -102,7 +102,6 @@ class MoceAlg:
 
     def inference(self, x, y, tau_a, tau_c, print_progress=False, delta=1e-0):
         """MOCE de-biased estimator and its inference"""
-        logger.info(f"inside inference tau_c = {tau_c}")
         self.beta_moce = np.zeros(self.p)
         self.beta_moce_astd = np.zeros(self.p)
 
@@ -236,7 +235,6 @@ class MoceAlg:
                 )
                 try:
 
-                    logger.info(f"outside inference tau_c ={tau_c}")
                     self.inference(x_train, y_train, tau_a_k[i], tau_c, False)
                     score[i] += (
                         y_test
@@ -253,17 +251,6 @@ class MoceAlg:
                     continue
 
         if plot_fig:
-            plt.plot(np.log(score), label=r"$MSE$")
-            plt.plot(np.log(r_a), label=r"$Bias$")
-            plt.axhline(y=np.log(10**-2 * self.n**-0.5))
-            plt.plot(
-                np.abs(np.log(r_a) - np.log(delta_tau * self.n**-0.5)), label=r"$MEC$"
-            )
-            plt.ylabel(r"$\log$-scale")
-            plt.legend()
-
-            plt.plot(np.log(tau_a_k), r_a)
-
             plt.figure(figsize=(7, 5))
             plt.plot(np.log(tau_a_k), r_a, label=r"$\|r_a\|$")
             plt.ylabel(r"$||r_a||_2$", fontsize=15)
@@ -311,13 +298,13 @@ class MoceAlg:
             plt.xlabel(r"$\log(\tau_c)$", fontsize=15)
             plt.tick_params(axis="both", which="major", labelsize=13)
             plt.plot(np.log(tau_c_k[8]), r_c[8], "ro")
-            # plt.savefig("tau_c.png")
+            plt.savefig("tau_c.png")
             plt.show()
 
             plt.plot(np.log(tau_c_k), np.gradient(r_c, np.log(tau_c_k)))
             plt.ylabel(ylabel=r"$\|r_c\|$")
             plt.xlabel(r"$\log(\tau_c)$")
-            # plt.savefig("d_tau_c.png")
+            plt.savefig("d_tau_c.png")
             plt.show()
 
         try:
@@ -371,88 +358,3 @@ class MoceAlg:
             / self.variance
         )
         return w_bc, w_1, w_2
-
-    def residual_bootstrap(self, x, y, b, method="residual"):
-        """ "Conduct residual bootstrap with the bootstrap replication b"""
-        self.beta_moce_b = np.zeros((self.a_tilde.sum(), b))
-        if method == "residual":
-            self.residual_a = y - x[:, self.a_tilde].dot(self.beta_hat[self.a_tilde])
-
-            for i in range(b):
-                y_b = x[:, self.a_tilde].dot(self.beta_moce[self.a_tilde]) + choice(
-                    self.residual_a, self.n
-                )
-
-                (
-                    self.beta_moce_b[
-                        i,
-                    ],
-                    _,
-                    _,
-                    _,
-                ) = np.linalg.lstsq(x[:, self.a_tilde], y_b, rcond=None)
-        elif method == "nonparametric":
-            for i in range(b):
-                index_i = choice(np.array(range(self.n)), self.n)
-                y_b = y[index_i]
-                x_b = x[
-                    index_i,
-                ]
-                self.beta_moce_b[:, i], _, _, _ = np.linalg.lstsq(
-                    x_b[:, self.a_tilde], y_b, rcond=None
-                )
-
-        self.beta_moce_bc = self.beta_moce.copy()
-        self.beta_moce_bc_astd = self.beta_moce_astd.copy()
-        self.beta_moce_bc[self.a_tilde] = self.beta_moce_bc[
-            self.a_tilde
-        ] * 2 - self.beta_moce_b.mean(axis=1)
-        self.beta_moce_bc_astd[self.a_tilde] = self.beta_moce_b.std(axis=1)
-
-
-class Bootstrap:
-    """
-    Class for bootstrap variance
-    """
-
-    def __init__(
-        self, x, y, b, min_tau_a, min_tau_c, a_max_size, a_offset, beta_0=None
-    ):
-        self.x = x
-        self.y = y
-        self.b = b
-        self.n = y.shape[0]
-        self.min_tau_a = min_tau_a
-        self.min_tau_c = min_tau_c
-        self.a_max_size = a_max_size
-        self.a_offset = a_offset
-        self.beta_0 = beta_0
-        self.beta_moce_b = np.zeros((self.x.shape[1], b))
-        self.beta_moce_bc = None
-        self.beta_moce_bc_astd = None
-        self.beta_moce_bc_quantile_025 = None
-        self.beta_moce_bc_quantile_975 = None
-        self.beta_moce_bc_quantile_005 = None
-        self.beta_moce_bc_quantile_995 = None
-
-    def moce_bootstrap(self):
-        for i in range(self.b):
-            index_i = choice(np.array(range(self.n)), self.n)
-            y_b = self.y[index_i]
-            x_b = self.x[
-                index_i,
-            ]
-
-            moce_obj = MoceAlg(x_b, y_b)
-            moce_obj.contraction()
-            moce_obj.expansion(self.a_max_size, self.a_offset)
-            moce_obj.inference(x_b, y_b, self.min_tau_a, self.min_tau_c)
-
-            self.beta_moce_b[:, i] = moce_obj.beta_moce
-
-        self.beta_moce_bc = self.beta_moce_b.mean(axis=1)
-        self.beta_moce_bc_astd = self.beta_moce_b.std(axis=1) * self.y.shape[0] ** 0.5
-        self.beta_moce_bc_quantile_025 = np.quantile(self.beta_moce_b, 0.025, axis=1)
-        self.beta_moce_bc_quantile_975 = np.quantile(self.beta_moce_b, 0.975, axis=1)
-        self.beta_moce_bc_quantile_005 = np.quantile(self.beta_moce_b, 0.005, axis=1)
-        self.beta_moce_bc_quantile_995 = np.quantile(self.beta_moce_b, 0.995, axis=1)
